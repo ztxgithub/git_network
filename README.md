@@ -94,7 +94,7 @@
             AF_INET:IP(ipv4地址32位)与端口号（16位的）的组合
             AF_UNIX:用一个绝对路径名作为地址(进程通信协议)
             
-        type：指定socket类型,有SOCK_STREAM,SOCK_DGRAM
+        type：指定socket类型,有SOCK_STREAM(value=1),SOCK_DGRAM(value=2)
               除了指定套接字类型,它可能包括以下任何值的按位or，以修改socket（）的行为
               SOCK_NONBLOCK和SOCK_CLOEXEC
         protocol：协议类型(一般写０)
