@@ -74,7 +74,12 @@
 
 - uint16 htons(uint16 hostshort); 将16位主机字符顺序转换成网络字符顺序
 
-- uint32_t htonl(uint32_t hostlong);; 将32位网络字符顺序转换成主机字符顺序
+- uint32_t htonl(uint32_t hostlong);; 将32位主机字符顺序转换成网络字符顺序
+
+注意：
+    ntohl,ntohs,htons,htonl这些函数不能用于float参数
+    
+[参考资料](http://man7.org/linux/man-pages/man3/endian.3.html)
 
 - socket()函数
 
@@ -141,7 +146,7 @@
             
             /* Internet address. */
             struct in_addr {
-                uint32_t       s_addr;     /* address in network byte order */
+                uint32_t       s_addr;     /* address in network byte order 网络序*/
             };
             
             #define UNIX_PATH_MAX    108
@@ -236,6 +241,39 @@
     返回:
         成功: 0 
         失败返回-1
+        EADDRINUSE：已经有其他的sockfd监听了相同的端口,该套接字没有绑定(ip和地址),
+                    或者绑定的端口是临时端口,被用做其他的功能
+        EBADF:sockfd is not a valid file descriptor.
+        ENOTSOCK: sockfd does not refer to a socket
+        EOPNOTSUPP: The socket is not of a type that supports the listen()
+                                 operation.
+            
+    注意：
+       用listen函数时,其sockfd的type一定是SOCK_STREAM
+         
+```
+
+- connect()函数
+
+```c
+
+    int connect(int sockfd, const struct sockaddr* server_addr, socklen_t addrlen)
+    
+    描述:
+         用于客户端建立tcp连接，发起三次握手过程。
+    参数:
+        sockfd: socket套接字
+        server_addr: 服务器的(ip:port)网络序
+            
+    返回:
+        成功: 0 
+        失败返回-1
+        EADDRINUSE：已经有其他的sockfd监听了相同的端口,该套接字没有绑定(ip和地址),
+                    或者绑定的端口是临时端口,被用做其他的功能
+        EBADF:sockfd is not a valid file descriptor.
+        ENOTSOCK: sockfd does not refer to a socket
+        EOPNOTSUPP: The socket is not of a type that supports the listen()
+                                 operation.
             
     注意：
        用listen函数时,其sockfd的type一定是SOCK_STREAM
