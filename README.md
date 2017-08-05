@@ -79,6 +79,17 @@
 注意：
     ntohl,ntohs,htons,htonl这些函数不能用于float参数
     
+```c
+    char str[] = "192.168.0.65:8080";
+    sscanf(str, "%u.%u.%u.%u:%u%n", &a, &b, &c, &d, &port, &len) == 5) 
+    {
+            /* Bind to a specific IPv4 address, e.g. 192.168.1.5:8080 */
+            sa->sin.sin_addr.s_addr =
+                htonl(((uint32_t) a << 24) | ((uint32_t) b << 16) | c << 8 | d);
+            sa->sin.sin_port = htons((uint16_t) port);
+    }
+```
+    
 [参考资料](http://man7.org/linux/man-pages/man3/endian.3.html)
 
 - socket()函数
@@ -140,7 +151,7 @@
             如ipv4对应的是
             struct sockaddr_in {
                 sa_family_t    sin_family; /* address family: AF_INET */
-                in_port_t      sin_port;   /* port in network byte order */
+                in_port_t      sin_port;   /* port in network byte order 大端序*/
                 struct in_addr sin_addr;   /* internet address */
             };
             
@@ -279,3 +290,167 @@
        用listen函数时,其sockfd的type一定是SOCK_STREAM
          
 ```
+
+- setsockopt
+```c
+
+     #include <sys/socket.h>
+    
+     int setsockopt(int socket, int level, int option_name,
+               const void *option_value, socklen_t option_len);
+               
+     描述:
+        
+     参数:
+        level:协议级别
+            SOL_SOCKET:操作sock 级别(一般使用这个)
+            IPPROTO_TCP:tcp 协议
+            
+            
+     返回值:
+        0:成功
+        
+        
+     1.
+           int bReuseaddr=1;
+           setsockopt(s,SOL_SOCKET ,SO_REUSEADDR,(const char*)&bReuseaddr,sizeof(int));
+           描述:
+                当一个服务端程序绑定ip:port对应的socket断开了,如果另外一个程序相同的ip:port,则需要
+                等待 2×RTT(2 times the maximum time a packet ),如果想要立即使用该ip:port,则
+                在bind函数之前一定要通过setsockopt()的SO_REUSEADDR参数.SO_REUSEADDR 一般用在
+                服务端程序
+                常见的用法:
+                    当你改变了服务器的配置文件,想要重启服务器加载新的的配置信息,如果没有SO_REUSEADDR
+                那么服务器程序调用bind()函数会失败,因为上一次被kill掉服务器的connection占用的ip:port
+                会保持 TIME_WAIT state for 30-120 seconds.
+           
+     2. 如果要已经处于连接状态的soket在调用closesocket后强制关闭，不经历TIME_WAIT的过程：
+            int bDontLinger = 0;
+            setsockopt(s,SOL_SOCKET,SO_DONTLINGER,(const char*)&bDontLinger,sizeof(int))
+            
+     3. 在send(),recv()过程中有时由于网络状况等原因，发收不能预期进行,而设置收发时限：
+         struct timeval timeout={3,0};//3s
+         int ret=setsockopt(sock_fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
+         int ret=setsockopt(sock_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
+     
+         如果ret==0 则为成功,-1为失败,这时可以查看errno来判断失败原因
+         int recvd=recv(sock_fd,buf,1024,0);
+         if(recvd==-1&&errno==EAGAIN)
+        {
+             printf("timeout\n");
+        }
+        
+      4.在send()的时候，返回的是实际发送出去的字节(同步)或发送到socket缓冲区的字节
+      (异步);系统默认的状态发送和接收一次为8688字节(约为8.5K)；在实际的过程中发送数据
+      和接收数据量比较大，可以设置socket缓冲区，而避免了send(),recv()不断的循环收发：
+            // 接收缓冲区
+            int nRecvBuf=32*1024;//设置为32K
+            setsockopt(s,SOL_SOCKET,SO_RCVBUF,(const char*)&nRecvBuf,sizeof(int));
+            //发送缓冲区
+            int nSendBuf=32*1024;//设置为32K
+            setsockopt(s,SOL_SOCKET,SO_SNDBUF,(const char*)&nSendBuf,sizeof(int));
+            
+      5.不用socket缓冲区,直接发送
+            int nZero=0;
+            setsockopt(socket, SOL_S0CKET,SO_RCVBUF, (char *)&nZero,sizeof(int));
+            setsockopt(socket,SOL_SOCKET,SO_SNDBUF, (char *)&nZero,sizeof(int));         
+```
+
+- select相关函数
+
+```c
+    
+    背景知识:
+        select函数用于在非阻塞中，当一个套接字或一组套接字有信号时通知你，系统提供select函数来实现多路复用输入/输出模型.
+        建议在read()函数之前使用select()函数,是因为select函数可以进行非阻塞,而read是一直阻塞等待指定的fd(文件描述符)
+        有数据才进行下一条语句
+        
+    fd_set 是一组文件描述字(fd)的集合,它用一位来表示一个fd,对于fd_set类型通过下面四个宏来操作：
+         FD_ZERO(fd_set *fdset):将指定的文件描述符集清空,在对文件描述符集合进行设置前,必须对其进行初始化(FD_ZERO操作)
+                 如果不清空,由于在系统分配内存空间后，通常并不作清空处理，所以结果是不可知的。
+         FD_ISSET(int fd, fd_set *set):用于在文件描述符集合中增加一个新的文件描述符。 
+         FD_CLR(int fd, fd_set *set):用于在文件描述符集合中删除一个文件描述符。 
+         FD_ISSET(int fd,fd_set *fdset);用于测试指定的文件描述符是否在该集合中。        
+        一个fd_set通常只能包含<32的fd（文件描述字）,因为fd_set其实只用了一个32位矢量来表示fd；
+        现在,UNIX系统通常会在头文件<sys/select.h>中定义常量FD_SETSIZE,
+        它是数据类型fd_set的描述字数量，其值通常是1024，这样就能表示<1024的fd。
+        根据fd_set的位矢量实现，我们可以重新理解操作fd_set的四个宏：
+        fd_set set;
+        FD_ZERO(&set);     
+        FD_SET(0, &set);   
+        FD_CLR(4, &set);     
+        FD_ISSET(5, &set);   
+    ―――――――――――――――――――――――――――――――――――――――
+    注意fd的最大值必须<FD_SETSIZE。
+    ―――――――――――――――――――――――――――――――――――――――
+    
+    int select(int nfds, fd_set *readfds, fd_set *writefds,
+                      fd_set *exceptfds, struct timeval *timeout);
+                      
+    参数:
+            nfds:
+                需要检查的文件描述字个数（即检查到fd_set的第几位），数值应该比三组fd_set中所含的最大fd值更大,
+                一般设为三组fd_set中所含的最大fd值加1（如在readset,writeset,exceptset中所含最大的fd为5，则nfds=6,
+                因为fd是从0开始的）.设这个值是为提高效率,使函数不必检查fd_set的所有1024位.
+                
+            readfds:
+                用来检查可读性的一组文件描述符
+            
+            writefds:
+                用来检查可写性的一组文件描述符
+                
+            exceptfds:
+                用来检查是否有异常条件出现的文件描述字。(注：错误不包括在异常条件之内)
+                
+            timeout
+                用于描述一段时间长度，如果在这个时间内，需要监视的描述符没有事件发生则函数返回，返回值为0。 
+                1.timeout=NULL（阻塞：select将一直被阻塞，直到某个文件描述符上发生了事件）
+                2.timeout所指向的结构设为非零时间（等待固定时间：如果在指定的时间段里有事件发生或者时间耗尽，函数均返回）
+                3.timeout所指向的结构，时间设为0（非阻塞：仅检测描述符集合的状态，然后立即返回，并不等待外部事件的发生）
+                
+    返回值：     
+         返回对应位仍然为1的fd的总数。
+         
+    注意:
+        select函数返回后,可以通过FD_ISSET来看哪个fd有数据交互,想要再调用select函数则需要进行初始化
+        (FD_ZERO(&set), FD_SET(0, &set))
+        
+       理解select模型的关键在于理解fd_set,为说明方便，取fd_set长度为1字节，
+       fd_set中的每一bit可以对应一个文件描述符fd。则1字节长的fd_set最大可以对应8个fd。
+       （1）执行fd_set set; FD_ZERO(&set);则set用位表示是0000,0000。
+       （2）若fd＝5,执行FD_SET(fd,&set);后set变为0001,0000(第5位置为1)
+       （3）若再加入fd＝2，fd=1,则set变为0001,0011
+       （4）执行select(6,&set,0,0,0)阻塞等待
+       （5）若fd=1,fd=2上都发生可读事件，则select返回，此时set变为0000,0011。注意：没有事件发生的fd=5被清空。
+       
+```
+
+- recv()函数
+
+```c
+
+    ssize_t recv(int sockfd, void *buf, size_t len, int flags);
+    
+    描述:
+         不论是客户还是服务器应用程序都用recv函数从TCP连接的另一端接收数据.
+         Socket的recv函数的执行流程:
+            当应用程序调用recv函数时,recv先等待s的发送缓冲中的数据被协议传送完毕,
+            如果协议在传送s的发送缓冲中的数据时出现网络错误,那么recv函数返回SOCKET_ERROR.
+            如果s的发送缓冲中没有数据或者数据被协议成功发送完毕后,recv先检查套接字s的接收缓冲区.
+            如果s接收缓冲区中没有数据或者协议正在接收数据,那么recv就一直等待.只到 协议把数据接收完毕。
+            当协议把数据接收完毕，recv函数就把s的接收缓冲中的数据copy到buf中
+            （注意协议接收到的数据可能大于buf的长度，所以 在这种情况下要调用几次recv函数才能把s的接收缓冲中的数据copy完.
+            recv函数仅仅是copy数据，真正的接收数据是协议来完成的）,
+            recv函数返回其实际copy的字节数。如果recv在copy时出错,那么它返回SOCKET_ERROR；
+            如果recv函数在等待协议接收数据时网络中断了，那么它返回0。
+    参数:
+        sockfd: 该函数的第一个参数指定接收端套接字描述符
+        flags: 一般设置为0
+            
+    返回:
+        返回实际接受的字节数
+            
+         
+```
+
+- send()函数
