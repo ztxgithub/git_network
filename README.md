@@ -29,6 +29,19 @@
      socket即是一种特殊的文件，一些socket函数就是对其进行的操作（读/写IO、打开、关闭）
 ```
 
+## 常见问题解决
+
+- connect连接时可能会发生连接不上的情况
+
+```c
+
+    1.fcntl();//将socket置为非阻塞模式; 
+    2.connect(); 
+    3.判断connect()的返回值,一般情况会返回-1,
+        这时你还必须判断错误码如果是EINPROGRESS,那说明connect还在继续;
+        如果错误码不是前者那么就是有问题了,不必往下执行,必须关掉socket;
+        待下次重连; 
+```
  
 
     
@@ -272,6 +285,39 @@
     
     描述:
          用于客户端建立tcp连接，发起三次握手过程。
+         1.对于阻塞式套接字，调用connect函数将激发TCP的三次握手过程,而且仅在连接建立成功或者出错时才返回
+         2.对于非阻塞式套接字,
+            调用connect函数经过timeout后
+            返回-1（表示出错）
+               如果错误为EINPROGRESS，表示连接建立，建立启动但是尚未完成；
+               否则,connect失败
+            如果返回0，则表示连接已经建立
+                
+         connect函数 连接成功建立时，描述符变成可写
+            
+                非阻塞connect 代码
+                 fcntl(s,F_SETFL, O_NONBLOCK); 
+                 if(connect(s, (struct sockaddr*)&saddr, sizeof(saddr)) == -1) { 
+                         if(errno == EINPROGRESS){// it is in the connect process 
+                                 struct timeval tv; 
+                                 fd_set writefds; 
+                                 tv.tv_sec = m_nTimeOut; 
+                                 tv.tv_usec = 0; 
+                                 FD_ZERO(&writefds); 
+                                 FD_SET(s, &writefds); 
+                                 if(select(s+1, NULL, &writefds, NULL, &tv) > 0){ 
+                                         int len=sizeof(int); 
+                                         getsockopt(s, SOL_SOCKET, SO_ERROR, &error, &len); 
+                                         if(error==0) ret=TRUE; 
+                                         else  ret=FALSE; 
+                                 }
+                                 else   
+                                    ret=FALSE;//timeout or error happen 
+                         }else ret=FALSE; 
+                 } 
+                 else    
+                    ret=TRUE; 
+
     参数:
         sockfd: socket套接字
         server_addr: 服务器的(ip:port)网络序
@@ -355,6 +401,25 @@
             setsockopt(socket, SOL_S0CKET,SO_RCVBUF, (char *)&nZero,sizeof(int));
             setsockopt(socket,SOL_SOCKET,SO_SNDBUF, (char *)&nZero,sizeof(int));         
 ```
+
+- getsockopt()函数
+```c
+
+        int getsockopt(int sockfd, int level, int optname,
+                      void *optval, socklen_t *optlen);
+                      
+        返回值:
+            0:成功
+            -1:失败
+                      
+            1.获取socket的erro的状态
+            getsockopt(s, SOL_SOCKET, SO_ERROR, &error, &len); 
+            如果error == 0 ,则socket通信正常,否则不正常
+            
+           
+            
+```
+
 
 - select相关函数
 
@@ -448,9 +513,75 @@
         flags: 一般设置为0
             
     返回:
-        返回实际接受的字节数
-            
-         
+        返回实际接受的字节数    
+       
 ```
 
 - send()函数
+
+```c
+
+    ssize_t send(int sockfd, const void *buff, size_t nbytes, int flags);
+    
+    描述:
+          1) send先比较发送数据的长度nbytes和套接字sockfd的发送缓冲区的长度，
+          如果nbytes > 套接字sockfd的发送缓冲区的长度, 该函数返回SOCKET_ERROR;
+
+          2) 如果nbtyes <= 套接字sockfd的发送缓冲区的长度,那么send先检查协议是否正在发送sockfd的发送缓冲区中的数据,
+          如果是就等待协议把数据发送完，
+          如果协议还没有开始发送sockfd的发送缓冲区中的数据或者sockfd的发送缓冲区中没有数据，
+          那么send就比较sockfd的发送缓冲区的剩余空间和nbytes
+
+           3) 如果 nbytes > 套接字sockfd的发送缓冲区剩余空间的长度，
+              send就一起等待协议把套接字sockfd的发送缓冲区中的数据发送完
+
+          4) 如果 nbytes < 套接字sockfd的发送缓冲区剩余空间大小，
+              send就仅仅把buf中的数据copy到剩余空间里(注意并不是send把套接字sockfd的发送缓冲区中的数据传到连接的另一端的，
+              而是协议传送的，send仅仅是把buf中的数据copy到套接字sockfd的发送缓冲区的剩余空间里)。
+
+          5) 如果send函数copy成功，就返回实际copy的字节数，如果send在copy数据时出现错误，那么send就返回SOCKET_ERROR;
+              如果在等待协议传送数据时网络断开，send函数也返回SOCKET_ERROR。
+
+          6) send函数把buff中的数据成功copy到sockfd的发送缓冲区的剩余空间后它就返回了，
+              但是此时这些数据并不一定马上被传到连接的另一端。
+              如果协议在后续的传送过程中出现网络错误的话，那么下一个socket函数就会返回SOCKET_ERROR。
+
+          7) 在unix系统下，如果send在等待协议传送数据时网络断开，调用send的进程会接收到一个SIGPIPE信号，
+              进程对该信号的处理是进程终止。
+              
+          1.在阻塞模式下:send的发送情况(缓冲区的大小为16k)
+            1，发送一个小于16k的数据，send马上就返回了
+               也就说是，send把待发送的数据放入发送缓冲马上就返回了，
+               前提是发送的数据字节数小于缓冲大小
+            2，发送一个大于16k的数据，send没有马上返回，阻塞了一下
+               send一定要把所有数据放入缓冲区才会返回，假设我们发32k的数据，
+               当send返回的时候，有16k数据已经到达另一端，剩下16k还在缓冲里面没有发出去
+               
+            所以只需要调用一次
+            nBytes = send(m_socket,buf,len,0);
+            返回值 nBytes一定等于len
+            
+          2.非阻塞模式下(缓冲区的大小为16k)
+            (1):发送一个小于16k的数据，send马上返回了，
+                而且返回的字节长度是等于发送的字节长度的，情况和阻塞模式是向相同的
+            
+           (2):发送一个大于16k的数据，send也是马上就返回了，返回的nByte小于待发送的字节数
+               在发送大于16k数据的情况下，多次调用send函数是必须的.
+                  来模拟一下实际情况，假设我们有32k的数据要发送:
+            
+                  第一次send，返回16384字节（16k），也就是填满了缓冲区
+                  第二次send，在这之前sleep了1000毫秒，这段时间可能已经有5000字节从缓冲区发出，
+                    到达另外一端了，于是缓冲区空了5000字节出来，相应的，这次返回的是5000，表示新放入了5000字节到缓冲区
+                  第三次send  ，和第二次相同，又放了6000字节
+                  最后一次send，放入了剩下的字节数，这个时候缓冲还是有数据的。
+            
+            
+            
+    参数:
+          sockfd: 指定发送端套接字描述符.
+          flags: 一般设置为0
+                  
+    返回:
+        返回实际接受的字节数    
+       
+```
