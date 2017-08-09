@@ -29,6 +29,12 @@
      socket即是一种特殊的文件，一些socket函数就是对其进行的操作（读/写IO、打开、关闭）
 ```
 
+- 网络sock 类型
+```c
+     message-based sockets:  SOCK_DGRAM, SOCK_RAW, SOCK_SEQPACKET
+     stream-based sockets: SOCK_STREAM
+```
+
 ## 常见问题解决
 
 - connect连接时可能会发生连接不上的情况
@@ -497,6 +503,7 @@
     ssize_t recv(int sockfd, void *buf, size_t len, int flags);
     
     描述:
+          适用与TCP连接
          不论是客户还是服务器应用程序都用recv函数从TCP连接的另一端接收数据.
          Socket的recv函数的执行流程:
             当应用程序调用recv函数时,recv先等待s的发送缓冲中的数据被协议传送完毕,
@@ -511,6 +518,35 @@
     参数:
         sockfd: 该函数的第一个参数指定接收端套接字描述符
         flags: 一般设置为0
+            
+    返回:
+        返回实际接受的字节数    
+       
+```
+
+- recvfrom()函数
+
+```c
+
+    ssize_t recvfrom(int socket, void *buffer, size_t length,
+           int flags, struct sockaddr *address, socklen_t *address_len);
+    
+    描述:
+          主要用于UDP连接
+          
+    参数:
+        sockfd: 该函数的第一个参数指定接收端套接字描述符
+        buffer:用户自定义的接受缓冲区
+        length:接受缓冲区的大小
+        flags: 一般设置为0
+                MSG_PEEK:对接受的数据进行预查看,该数据被指定为未读(不会从系统接受缓冲区中删除)
+                         下一次recvfrom()函数或则类似功能的函数会返回该数据
+                
+        address:
+                1.可以为NULL
+                2.被赋值的指针:保存对端的address信息
+                
+        address_len:地址大小
             
     返回:
         返回实际接受的字节数    
