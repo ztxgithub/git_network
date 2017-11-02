@@ -33,7 +33,59 @@
 ```c
      message-based sockets:  SOCK_DGRAM, SOCK_RAW, SOCK_SEQPACKET
      stream-based sockets: SOCK_STREAM
+     
+     如果是tcp协议通信:
+        1.tcp服务器一般有socket()函数,bind()函数,listen()函数,accept()函数,recv()函数,send()函数
+        2.tcp 客户端 一般有socket()函数,是否将这套接字设置为非阻塞模式,connect()函数,recv()函数,send()函数
+        
+     如果是udp协议通信
+     1. udp服务器一般有socket()函数,bind()函数,recvfrom()函数,sendto()函数.
+     2. udp客户端一般有socket()函数,设置是否可以广播(SO_BROADCAST), recvfrom()函数,sendto()函数.
 ```
+
+- tcp sock通信
+```c
+    当tcp客户端连接到服务器时, 是作用到 accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) 的传入参数
+    中, 此时accept返回值是一个连接new socket ,以后通信发送接受数据都是通过这个 new socket, 同时在客户端断开连接时,作用
+    的是 new socket,表现的形式是 recv函数返回字节个数为 0
+```
+
+- 广播报文
+
+```c
+    将数据包同时发给多台主机,必须使用UDP和标准IPv4,将广播封包送到网路之前,先设定SO_BROADCAST socket选项.
+    广播数据包和一样的点对点的数据包没有说明差别,只不过是发送的目的ip地址不一样,广播数据包的目的ip地址是广播地址
+    192.168.1.255(如果网络号是192.168.1.0,子网掩码255.255.255.0).那么在同一个LAN上的所有主机都会收到该数据包.
+    
+    如果没有设置SO_BROADCAST socket选项,sendto的目的地址为广播ip地址会发送不成功,返回错误代码.
+    这个要慎用
+    
+    
+      if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        perror("socket");
+        exit(1);
+      }
+    
+      // sockfd 可以送廣播封包
+      if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast,
+        sizeof broadcast) == -1) {
+        perror("setsockopt (SO_BROADCAST)");
+        exit(1);
+      }
+    
+      their_addr.sin_family = AF_INET; // host byte order
+      their_addr.sin_port = htons(SERVERPORT); // short, network byte order
+      their_addr.sin_addr = *((struct in_addr *)he->h_addr);  //广播地址,如192.1.168.255
+      memset(their_addr.sin_zero, '\0', sizeof their_addr.sin_zero);
+    
+      if ((numbytes=sendto(sockfd, argv[2], strlen(argv[2]), 0,
+              (struct sockaddr *)&their_addr, sizeof their_addr)) == -1) {
+        perror("sendto");
+        exit(1);
+        }
+    
+```
+
 
 ## 常见问题解决
 
@@ -146,7 +198,7 @@
     注意：并不是上面的type和protocol可以随意组合的，如SOCK_STREAM不可以跟IPPROTO_UDP组合。
          当protocol为0时，会自动选择type类型对应的默认协议。
          当我们调用socket创建一个socket时，返回的socket描述字它存在于协议族（address family，AF_XXX）空间中，
-         但没有一个具体的地址。如果想要给它赋值一个地址，就必须调用bind()函数，
+         但没有一个具体的地址(不管是tcp还是udp)。如果想要给它赋值一个地址，就必须调用bind()函数，
          否则就当调用connect()、listen()时系统会自动随机分配一个端口。
          
 ```
@@ -163,6 +215,7 @@
         通常服务器在启动的时候都会绑定一个众所周知的地址如ip地址+端口号,用于提供服务,
         客户就可以通过它来接连服务器；而客户端就不用指定,有系统自动分配一个端口号和自身的ip地址组合。
         这就是为什么通常服务器端在listen之前会调用bind(),
+        
         而客户端就不会调用,而是在connect()时由系统随机生成一个。
     参数:
         sockfd: socket套接字
@@ -201,7 +254,8 @@
             
     注意：
     许多时候内核会我们自动绑定一个地址，然而有时用 户可能需要自己来完成这个绑定的过程，以满足实际应用的需要，
-    最典型的情况是一个服务器进程需要绑定一个众所周知的地址或端口以等待客户来连接
+    最典型的情况是一个服务器进程需要绑定一个众所周知的地址或端口以等待客户来连接,如果服务器在刚开始端口号(port)
+    赋值为0,则调用bind()函数,内核系统将自动为其分配端口号,通过 getsockname()函数可以获取.
          
 ```
 
@@ -271,15 +325,48 @@
     返回:
         成功: 0 
         失败返回-1
-        EADDRINUSE：已经有其他的sockfd监听了相同的端口,该套接字没有绑定(ip和地址),
-                    或者绑定的端口是临时端口,被用做其他的功能
-        EBADF:sockfd is not a valid file descriptor.
-        ENOTSOCK: sockfd does not refer to a socket
-        EOPNOTSUPP: The socket is not of a type that supports the listen()
-                                 operation.
             
     注意：
        用listen函数时,其sockfd的type一定是SOCK_STREAM
+         
+```
+
+- accept()函数
+
+```c
+
+    int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+    
+    描述:
+        TCP服务器端依次调用socket()、bind()、listen()之后,就会监听指定的socket地址了.
+        TCP客户端依次调用socket()、connect()之后就想TCP服务器发送了一个连接请求.
+        TCP服务器监听到这个请求之后,就会调用accept()函数取接收请求.这样连接就建立好了
+    参数:
+        sockfd: 服务器的socket描述字
+        addr: 用于返回客户端的协议地址
+        addrlen: 协议地址的长度
+            
+    返回:
+        成功: 内核自动生成的一个全新的描述字，代表与返回客户的TCP连接
+            
+    注意：
+       注意：accept的第一个参数为服务器的socket描述字,是服务器开始调用socket()函数生成的,称为监听socket描述字；
+       而accept函数返回的是已连接的socket描述字。一个服务器通常通常仅仅只创建一个监听socket描述字,
+       它在该服务器的生命周期内一直存在.accept()成功返回新的套接字socketfd_new,
+       服务器端即可使用这个新的套接字socketfd_new与该客户端进行通信, 而sockfd 则继续用于监听其他客户端的连接请求。
+       
+       accept函数产生的新的socket没有占用新的端口:
+            一个端口肯定只能绑定一个socket.服务器端的端口在bind的时候已经绑定到了监听套接字sockfd所描述的对象上，
+            accept函数返回的socket对象其实并没有进行端口的占有,而是复制了socetfd的本地IP和端口号，
+            并且记录了连接过来的客户端的IP和端口号。           
+            客户端发送过来的数据可以分为2种，一种是连接请求，一种是已经建立好连接后的数据传输。   
+            由于TCP/IP协议栈是维护着一个接收和发送缓冲区的.在接收到来自客户端的数据包后,
+            服务器端的TCP/IP协议栈应该会做如下处理：如果收到的是请求连接的数据包，
+            则传给监听着连接请求端口的socetfd套接字进行accept处理；
+            如果是已经建立过连接后的客户端数据包,则将数据放入接收缓冲区.
+            当服务器端需要读取指定客户端的数据时,则可以利用socketfd_new 套接字通过recv或者read函数
+            到缓冲区里面去取指定的数据（因为socketfd_new代表的socket对象记录了客户端IP和端口,因此可以鉴别）。
+
          
 ```
 
@@ -325,21 +412,9 @@
                     ret=TRUE; 
 
     参数:
-        sockfd: socket套接字
+        sockfd: socket套接字,如果connect函数成功后,客户端通过该套接字进行数据发送和接受
         server_addr: 服务器的(ip:port)网络序
             
-    返回:
-        成功: 0 
-        失败返回-1
-        EADDRINUSE：已经有其他的sockfd监听了相同的端口,该套接字没有绑定(ip和地址),
-                    或者绑定的端口是临时端口,被用做其他的功能
-        EBADF:sockfd is not a valid file descriptor.
-        ENOTSOCK: sockfd does not refer to a socket
-        EOPNOTSUPP: The socket is not of a type that supports the listen()
-                                 operation.
-            
-    注意：
-       用listen函数时,其sockfd的type一定是SOCK_STREAM
          
 ```
 
@@ -405,7 +480,11 @@
       5.不用socket缓冲区,直接发送
             int nZero=0;
             setsockopt(socket, SOL_S0CKET,SO_RCVBUF, (char *)&nZero,sizeof(int));
-            setsockopt(socket,SOL_SOCKET,SO_SNDBUF, (char *)&nZero,sizeof(int));         
+            setsockopt(socket,SOL_SOCKET,SO_SNDBUF, (char *)&nZero,sizeof(int));    
+                 
+      6.将udp设置为可以发送广播报文   
+        int bBroadcast = 1;
+        setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char*)&bBroadcast, sizeof(BOOL));
 ```
 
 - getsockopt()函数
@@ -434,7 +513,7 @@
     背景知识:
         select函数用于在非阻塞中，当一个套接字或一组套接字有信号时通知你，系统提供select函数来实现多路复用输入/输出模型.
         建议在read()函数之前使用select()函数,是因为select函数可以进行非阻塞,而read是一直阻塞等待指定的fd(文件描述符)
-        有数据才进行下一条语句
+        有数据才进行下一条语句.一般适用于网络套接字.
         
     fd_set 是一组文件描述字(fd)的集合,它用一位来表示一个fd,对于fd_set类型通过下面四个宏来操作：
          FD_ZERO(fd_set *fdset):将指定的文件描述符集清空,在对文件描述符集合进行设置前,必须对其进行初始化(FD_ZERO操作)
@@ -480,7 +559,9 @@
                 3.timeout所指向的结构，时间设为0（非阻塞：仅检测描述符集合的状态，然后立即返回，并不等待外部事件的发生）
                 
     返回值：     
-         返回对应位仍然为1的fd的总数。
+         返回对应位仍然为1的fd的总数, 对于readfds文件描述符而言,只要其中sock对应的TCP/UDP接受缓冲区有数据
+         (其中包括 对端close操作 ,recv()函数返回值为 0)就返回,
+         对于writefds文件描述符而言,只要其中的sock对应的TCP/UDP发送缓冲区没有满,可以写
          
     注意:
         select函数返回后,可以通过FD_ISSET来看哪个fd有数据交互,想要再调用select函数则需要进行初始化
@@ -560,6 +641,7 @@
     ssize_t send(int sockfd, const void *buff, size_t nbytes, int flags);
     
     描述:
+           适用于tcp协议
           1) send先比较发送数据的长度nbytes和套接字sockfd的发送缓冲区的长度，
           如果nbytes > 套接字sockfd的发送缓冲区的长度, 该函数返回SOCKET_ERROR;
 
@@ -619,5 +701,34 @@
                   
     返回:
         返回实际接受的字节数    
+       
+```
+
+
+- sendto()函数
+
+```c
+
+    int sendto(int sockfd, const void * msg, int len, unsigned int flags, 
+               const struct sockaddr *to, int tolen ) ;
+    
+    描述:
+          主要用于UDP协议
+          
+    参数:
+        sockfd: 通信的socket套接字
+        msg:用户自定义的接受缓冲区
+        len:接受缓冲区的大小
+        flags: 一般设置为0
+        to:
+                1.可以为NULL
+                2.被赋值的指针:保存对端的address信息
+                
+        to:要发送的对端的地址协议
+        tolen: sizeof(struct sockaddr)
+            
+    返回:
+         成功:返回实际传送出去的字符数    
+         失败:-1
        
 ```
