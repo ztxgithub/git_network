@@ -342,7 +342,7 @@
         TCP客户端依次调用socket()、connect()之后就想TCP服务器发送了一个连接请求.
         TCP服务器监听到这个请求之后,就会调用accept()函数取接收请求.这样连接就建立好了
     参数:
-        sockfd: 服务器的socket描述字
+        sockfd: 服务器的监听socket描述字
         addr: 用于返回客户端的协议地址
         addrlen: 协议地址的长度
             
@@ -351,7 +351,7 @@
             
     注意：
        注意：accept的第一个参数为服务器的socket描述字,是服务器开始调用socket()函数生成的,称为监听socket描述字；
-       而accept函数返回的是已连接的socket描述字。一个服务器通常通常仅仅只创建一个监听socket描述字,
+       而accept函数返回的是已连接的socket描述字。一个服务器通常仅仅只创建一个监听socket描述字,
        它在该服务器的生命周期内一直存在.accept()成功返回新的套接字socketfd_new,
        服务器端即可使用这个新的套接字socketfd_new与该客户端进行通信, 而sockfd 则继续用于监听其他客户端的连接请求。
        
@@ -531,7 +531,7 @@
         FD_CLR(4, &set);     
         FD_ISSET(5, &set);   
     ―――――――――――――――――――――――――――――――――――――――
-    注意fd的最大值必须<FD_SETSIZE。
+    注意fd的最大值必须<FD_SETSIZE>
     ―――――――――――――――――――――――――――――――――――――――
     
     int select(int nfds, fd_set *readfds, fd_set *writefds,
