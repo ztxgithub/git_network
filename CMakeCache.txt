@@ -121,7 +121,7 @@ CMAKE_OBJCOPY:FILEPATH=/usr/bin/objcopy
 CMAKE_OBJDUMP:FILEPATH=/usr/bin/objdump
 
 //Value Computed by CMake
-CMAKE_PROJECT_NAME:STATIC=mongoose_example
+CMAKE_PROJECT_NAME:STATIC=network_example
 
 //Path to a program.
 CMAKE_RANLIB:FILEPATH=/usr/bin/ranlib
@@ -183,6 +183,12 @@ mongoose_example_BINARY_DIR:STATIC=/home/jame/share_user/git_network
 
 //Value Computed by CMake
 mongoose_example_SOURCE_DIR:STATIC=/home/jame/share_user/git_network
+
+//Value Computed by CMake
+network_example_BINARY_DIR:STATIC=/home/jame/share_user/git_network
+
+//Value Computed by CMake
+network_example_SOURCE_DIR:STATIC=/home/jame/share_user/git_network
 
 
 ########################

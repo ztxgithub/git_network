@@ -62,50 +62,108 @@ static void client_handler(struct mg_connection *conn, int ev, void *p) {
 }
 
 int main(int argc, char *argv[]) {
-    struct mg_mgr mgr;
+    union socket_address sa;
+    sock_t sock;
+    socklen_t len = sizeof(sa.sin);
+    int ret = 0;
 
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <port> <client|server>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    } else if (strcmp(argv[2], "client") == 0) {
-        sock_t fds[2];
-        struct mg_connection *ioconn, *server_conn;
+    int sp[2];
+    sock = sp[0] = sp[1] = INVALID_SOCKET;
+    int sock_type = SOCK_DGRAM;
+    (void) memset(&sa, 0, sizeof(sa));
+    sa.sin.sin_family = AF_INET;
+    sa.sin.sin_port = htons(51249);
+    sa.sin.sin_addr.s_addr = htonl(0x7f000001); /* 127.0.0.1 */
 
-        mg_mgr_init(&mgr, NULL);
+    char buf_ip[60];
+    mg_sock_addr_to_str(&sa, buf_ip, sizeof(buf_ip), MG_SOCK_STRINGIFY_IP|MG_SOCK_STRINGIFY_PORT);
+    printf("sa_ip[%s]\n",  buf_ip);
 
-        inet_network
 
-        // Connect to the pubsub server
-        server_conn = mg_connect(&mgr, argv[1], client_handler);
-        if (server_conn == NULL) {
-            fprintf(stderr, "Cannot connect to port %s\n", argv[1]);
-            exit(EXIT_FAILURE);
-        } else {
-            printf("mg_connect fun success\n");
-        }
-        server_conn->flags |= MG_F_USER_2;  // Mark this as a client connection
+    sock = socket(AF_INET, sock_type, 0);
+    if(sock == INVALID_SOCKET) {
+        printf("sock == INVALID_SOCKET\n");
+    }
 
-        // Create a socketpair and give one end to the thread that reads stdin
-        mg_socketpair(fds, SOCK_STREAM);
+    if (bind(sock, &sa.sa, len) != 0) {
+        printf("bind(sock, &sa.sa, len) != 0\n");
+    }
 
-        mg_start_thread(stdin_thread, &fds[1]);
+    memset(buf_ip, 0, sizeof(buf_ip));
+    mg_sock_addr_to_str(&sa, buf_ip, sizeof(buf_ip), MG_SOCK_STRINGIFY_IP|MG_SOCK_STRINGIFY_PORT);
+    printf("sa_ip[%s]\n",  buf_ip);
 
-        // The other end of a pair goes inside the server
-        ioconn = mg_add_sock(&mgr, fds[0], client_handler);
-        ioconn->flags |= MG_F_USER_1;  // Mark this so we know this is a stdin
-        ioconn->user_data = server_conn;
+     if (sock_type == SOCK_STREAM && listen(sock, 1) != 0) {
+         printf("listen(sock, 1) != 0\n");
+    }
 
+    if (getsockname(sock, &sa.sa, &len) != 0) {
+        printf("getsockname fail\n");
+    }
+    memset(buf_ip, 0, sizeof(buf_ip));
+    mg_sock_addr_to_str(&sa, buf_ip, sizeof(buf_ip), MG_SOCK_STRINGIFY_IP|MG_SOCK_STRINGIFY_PORT);
+    printf("sa_ip[%s]\n",  buf_ip);
+
+    if ((sp[0] = socket(AF_INET, sock_type, 0)) == INVALID_SOCKET) {
+        printf("sp[0] socket() fail\n");
+    }
+
+    union socket_address sa_client;
+    memset(&sa_client, 0, sizeof(sa_client));
+    if (getsockname(sp[0], &sa_client.sa, &len) != 0) {
+        printf("getsockname fail\n");
+    }
+    memset(buf_ip, 0, sizeof(buf_ip));
+    mg_sock_addr_to_str(&sa_client, buf_ip, sizeof(buf_ip), MG_SOCK_STRINGIFY_IP|MG_SOCK_STRINGIFY_PORT);
+    printf("sa_ip[%s]\n",  buf_ip);
+
+    int sp_client_con_flag = -1;
+    if ((sp_client_con_flag = connect(sp[0], &sa.sa, len)) != 0) {
+        printf("sp_client_con fail\n");
+    }
+
+    memset(&sa_client, 0, sizeof(sa_client));
+    if (getsockname(sp[0], &sa_client.sa, &len) != 0) {
+        printf("getsockname fail\n");
+    }
+    memset(buf_ip, 0, sizeof(buf_ip));
+    mg_sock_addr_to_str(&sa_client, buf_ip, sizeof(buf_ip), MG_SOCK_STRINGIFY_IP|MG_SOCK_STRINGIFY_PORT);
+    printf("sa_ip[%s]\n",  buf_ip);
+
+    memset(&sa, 0, sizeof(sa));
+    int sp_0_getsock_flag = -1;
+    int sp_0_getso_flag = -1;
+    if (sock_type == SOCK_DGRAM &&
+               ((sp_0_getsock_flag = getsockname(sp[0], &sa.sa, &len)) != 0 ||
+                       (sp_0_getso_flag = connect(sock, &sa.sa, len)) != 0)) {
+    } else if ((sp[1] = (sock_type == SOCK_DGRAM ? sock
+                                                 : accept(sock, &sa.sa, &len))) ==
+               INVALID_SOCKET) {
     } else {
-        // Server code path
-        mg_mgr_init(&mgr, NULL);
-        mg_bind(&mgr, argv[1], server_handler);
-        printf("Starting pubsub server on port %s\n", argv[1]);
+        mg_set_close_on_exec(sp[0]);
+        mg_set_close_on_exec(sp[1]);
+        if (sock_type == SOCK_STREAM) closesocket(sock);
+        ret = 1;
     }
 
-    for (;;) {
-        mg_mgr_poll(&mgr, 1000);
-    }
-    mg_mgr_free(&mgr);
+    printf("sp[0]\n");
+    memset(buf_ip, 0, sizeof(buf_ip));
+    mg_sock_addr_to_str(&sa, buf_ip, sizeof(buf_ip), MG_SOCK_STRINGIFY_IP|MG_SOCK_STRINGIFY_PORT);
+    printf("sa_ip[%s]\n",  buf_ip);
 
-    return EXIT_SUCCESS;
+    if (getsockname(sock, &sa.sa, &len) != 0) {
+        printf("getsockname fail\n");
+    }
+    memset(buf_ip, 0, sizeof(buf_ip));
+    mg_sock_addr_to_str(&sa, buf_ip, sizeof(buf_ip), MG_SOCK_STRINGIFY_IP|MG_SOCK_STRINGIFY_PORT);
+    printf("sa_ip[%s]\n",  buf_ip);
+
+    if (!ret) {
+        if (sp[0] != INVALID_SOCKET) closesocket(sp[0]);
+        if (sp[1] != INVALID_SOCKET) closesocket(sp[1]);
+        if (sock != INVALID_SOCKET) closesocket(sock);
+        sock = sp[0] = sp[1] = INVALID_SOCKET;
+    }
+
+    return ret;
 }
