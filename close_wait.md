@@ -53,3 +53,22 @@
         
 ```
 
+- CLOSE_WAIT状态原因
+
+```c
+
+    出现CLOSE_WAIT的原因很简单,就是某一方在网络连接断开后,没有检测到这个错误，没有执行closesocket，导致了这个状态的实现.
+    当发起主动关闭的左边这方发送一个FIN过去后,右边被动关闭的这方要回应一个ACK,这个ACK是TCP回应的,而不是应用程序发送的,
+    此时,被动关闭的一方就处于CLOSE_WAIT状态了.如果此时被动关闭的这一方不再继续调用closesocket,那么他就不会发送接下来的FIN,
+    导致自己老是处于CLOSE_WAIT.只有被动关闭的这一方调用了closesocket,才会发送一个FIN给主动关闭的这一 方,
+    同时也使得自己的状态变迁为LAST_ACK.
+    
+    int nRet = recv(s,....); 
+    if (nRet == SOCKET_ERROR) 
+    { 
+        closesocket(s);   //这个代码一定要,否则客户端会连不上服务器,且连接的状态一直为CLOSE_WAIT状态
+    return FALSE; 
+    }
+        
+```
+
