@@ -129,13 +129,61 @@
    返回值 成功则返回非0值，失败则返回0。
 
 ```
+- int inet_pton(int af, const char *src, void *dst);将ip字符串转化为网络字节序(大端)
 
-- char * inet_ntoa(struct in_addr in); 将网络字节序(大端)转化为ip字符串
+```c
+
+   其中p代表presentation, n代表numeric(数值)
+   参数：
+        af：
+            AF_INET(ipv4)
+            AF_INET6(ipv6)
+        src:字符串ip,例如"192.168.0.3"
+        dst：struct in_addr*,传入的是指针 ,结果被赋值
+        
+   返回值:
+        1:成功
+        0:src字符串ip不符合规则
+        -1:其他错误
+        
+       char str[]="172.16.10.196";
+       struct in_addr myin;
+       inet_pton(AF_INET,str,&myin);
+
+```
+
+- char* inet_ntoa(struct in_addr in); 将网络字节序(大端)转化为ip字符串
 
 ```c
 
     函数说明 inet_ntoa()用来将参数in所指的网络二进制的数字转换成网络地址，然后将指向此网络地址字符串的指针返回。
     返回值 成功则返回字符串指针，失败则返回NULL。
+
+```
+
+- const char *inet_ntop(int af, const void *addrptr, char *strptr, size_t len); 将网络字节序(大端)转化为ip字符串
+
+```c
+
+   其中p代表presentation, n代表numeric(数值)
+   参数：
+        af：
+            AF_INET(ipv4)
+            AF_INET6(ipv6)
+        addrptr:输入参数, struct in_addr*,传入的是指针
+        strptr：输出参数 字符串ip缓冲区
+        len:缓冲区大小
+        
+   返回值:
+       非空:指向字符串ip的地址
+       NULL:失败
+            strptr参数为NULL
+            len 太小
+        
+   注意：
+        参数strptr和len都应该要足够大,如果len太小,不足以容纳表达式结果(包括结尾的空字符),那么返回一个空指针,并置errno为ENOSPC
+        inet_ntop函数的strptr参数不可以是一个空指针.调用者必须为目标存储单元分配内存并指定其大小。调用成功时，
+        这个指针就是该函数的返回值。
 
 ```
 
