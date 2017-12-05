@@ -310,6 +310,51 @@
          
 ```
 
+- gethostname()函数:获取本地主机的标准主机名
+
+```c
+
+    int gethostname(char *name, size_t len)
+    int sethostname(const char *name, size_t len);设置标准主机名
+    
+    描述:
+        获取本地主机的标准名保存到name缓冲区中
+    参数:
+        name: 接收缓冲区,其长度必须为len字节或是更长,存获得的主机名。
+        len：接收缓冲区name的最大长度
+            
+    返回:
+        成功: 0 
+        失败返回-1
+            
+              printf("%s\n", strerror(errno));
+```
+
+- gethostbyname()函数:用域名或主机名获取IP地址
+
+```c
+
+    struct hostent *gethostbyname(const char *name);
+    
+    描述:
+         这个函数的传入值是域名或者主机名,例如"www.google.cn"等等。传出值，是一个hostent的结构。如果函数调用失败，将返回NULL.
+    参数:
+        name: 域名或者主机名
+            
+        struct hostent {
+                    char  *h_name;            /* official name of host  主机的规范名*/
+                    char **h_aliases;         /* alias list 主机的别名,字符串数组,可以有很多个别名*/
+                    int    h_addrtype;        /* host address type 主机ip地址的类型 ipv4(AF_INET) ipv6(AF_INET6)*/
+                    int    h_length;          /* length of address */
+                    char **h_addr_list;       /* list of addresses
+                                                 主机的ip地址，这个是以网络字节序存储的,可能有多个ip*/
+                }
+                
+        char **pptr = hostent->h_addr_list;
+        for (; *pptr != NULL; ++pptr)
+                 printf("address: %s\n", inet_ntop(hptr->h_addrtype, *pptr, str, sizeof(str)));
+```
+
 - listen()函数
 
 ```c
