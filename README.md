@@ -826,3 +826,70 @@
          失败:-1
        
 ```
+
+- getifaddrs()函数
+
+```c
+
+   #include <sys/types.h>
+   #include <ifaddrs.h>
+ 
+   int getifaddrs(struct ifaddrs **ifap);
+ 
+   void freeifaddrs(struct ifaddrs *ifa);
+    
+    描述:
+          获取本地网络接口的信息,getifaddrs创建一个链表,链表上的每个节点都是一个struct ifaddrs结构，
+          getifaddrs()返回链表第一个元素的指针
+            
+    返回:
+         成功:0    
+         失败:-1
+            printf("%s\n", strerror(errno));
+            
+            
+     注意：
+        使用完getifaddrs()函数后,记得调用freeifaddrs()进行资源释放
+            
+    struct ifaddrs {
+                   struct ifaddrs  *ifa_next;    /* Next item in list ,NULL代表最后一个item*/
+                   char            *ifa_name;    /* Name of interface 网络接口名*/
+                   unsigned int     ifa_flags;   /* Flags from SIOCGIFFLAGS  网络接口标志*/
+                   struct sockaddr *ifa_addr;    /* Address of interface */
+                   struct sockaddr *ifa_netmask; /* Netmask of interface */
+                   union {
+                       struct sockaddr *ifu_broadaddr;
+                                        /* Broadcast address of interface */
+                       struct sockaddr *ifu_dstaddr;
+                                        /* Point-to-point destination address */
+                   } ifa_ifu;
+               #define              ifa_broadaddr ifa_ifu.ifu_broadaddr
+               #define              ifa_dstaddr   ifa_ifu.ifu_dstaddr
+                   void            *ifa_data;    /* Address-specific data */
+               };
+               
+               
+    ifa_flags 标志位：
+                      IFF_UP            Interface is running.
+                      IFF_BROADCAST     Valid broadcast address set.
+        
+                      IFF_DEBUG         Internal debugging flag.
+                      IFF_LOOPBACK      Interface is a loopback interface.
+                      IFF_POINTOPOINT   Interface is a point-to-point link.
+                      IFF_RUNNING       Resources allocated.
+                      IFF_NOARP         No arp protocol, L2 destination address not
+                                        set.
+                      IFF_PROMISC       Interface is in promiscuous mode.
+                      IFF_NOTRAILERS    Avoid use of trailers.
+                      IFF_ALLMULTI      Receive all multicast packets.
+                      IFF_MASTER        Master of a load balancing bundle.
+                      IFF_SLAVE         Slave of a load balancing bundle.
+                      IFF_MULTICAST     Supports multicast
+                      IFF_PORTSEL       Is able to select media type via ifmap.
+                      IFF_AUTOMEDIA     Auto media selection active.
+                      IFF_DYNAMIC       The addresses are lost when the interface
+                                        goes down.
+                      IFF_LOWER_UP      Driver signals L1 up (since Linux 2.6.17)
+                      IFF_DORMANT       Driver signals dormant (since Linux 2.6.17)
+                      IFF_ECHO          Echo sent packets (since Linux 2.6.25)
+```
