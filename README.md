@@ -23,6 +23,15 @@
 ```
 [INADDR_ANY相关资料](http://www.cnblogs.com/pengdonglin137/p/3309505.html)
 
+- 网络数据结构的转化
+
+```c
+
+    struct sockaddr是通用的套接字地址,而struct sockaddr_in则是internet环境下套接字的地址形式,二者长度一样,都是16个字节。
+    二者是并列结构，指向sockaddr_in结构的指针也可以指向sockaddr。一般情况下，需要把sockaddr_in结构强制转换成sockaddr结构
+    再传入系统调用函数中。
+```
+
 - 网络进程通信
 ```c
     （ip地址，协议，端口）就可以标识网络的进程了，网络中的进程通信就可以利用这个标志与其它进程进行交互
@@ -559,6 +568,7 @@
         {
              printf("timeout\n");
         }
+        这两个选项仅对与数据收发相关的系统调用(send, sendmsg, recv, recvmsg, accept, connect )有效.
         
       4.在send()的时候，返回的是实际发送出去的字节(同步)或发送到socket缓冲区的字节
       (异步);系统默认的状态发送和接收一次为8688字节(约为8.5K)；在实际的过程中发送数据
@@ -578,6 +588,53 @@
       6.将udp设置为可以发送广播报文   
         int bBroadcast = 1;
         setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char*)&bBroadcast, sizeof(BOOL));
+        
+      7.SO_LINGER
+            在默认情况下,当调用close关闭socke的使用,close会立即返回,但是,如果send buffer中还有数据,
+            系统会试着先把send buffer中的数据发送出去,设置SO_LINGER参数可以控制close后的行为.
+            
+            	linger.l_onoff = 0;
+            	linger.l_linger = 0;
+            	setsockopt(fd, SOL_SOCKET, SO_LINGER, &linger, (socklen_t)sizeof(struct linger)) < 0
+                            
+                struct linger {  
+                      int l_onoff  //0=off, nonzero=on(开关)  
+                      int l_linger //linger time(延迟时间)  
+                }  
+                
+   `        情况一: l_onoff==0
+                   内核缺省情况，close调用会立即返回给调用者，如果可能将会传输任何未发送的数据
+            情况二： l_onoff为非0,l_linger为0
+                    当调用close的时候,TCP连接会立即断开.send buffer中未被发送的数据将被丢弃,并向对方发送一个RST信息.
+                    这种方式不是以4次握手方式结束TCP链接,所以TCP连接将不会进入TIME_WAIT状态,这种关闭方式称为“强制”或“失效”关闭.
+                    
+            情况三: l_onoff 为非0,l_linger为非0
+                    调用close去关闭socket的时候，内核将会延迟,阻塞直到l_linger时间超时或数据发送完成(套接字必须设置为阻塞)
+                    在超时时间段内保持尝试发送，若超时则立即放弃.
+                    
+       8.TCP_NODELAY
+            将它设置为true,能有效的提高数据的实时响应性
+            	flags = 1;
+            	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&flags, sizeof(flags)) < 0)
+            	
+       9.SO_KEEPALIVE
+            保持连接检测对方主机是否崩溃,避免（服务器）永远阻塞于TCP连接的输入.
+            TCP_KEEPIDLE: tcp_keepalive_time
+            TCP_KEEPCNT: tcp_keepalive_probes
+            TCP_KEEPINTVL: tcp_keepalive_intvl
+            
+            keepAlive = 1;
+            setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *)&keepAlive, sizeof(keepAlive)) 
+      
+            keepIdle = idleSeconds;
+            setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, (char *)&keepIdle,sizeof(keepIdle)) 
+
+            keepInterval = 10;
+            setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, (char *)&keepInterval,sizeof(keepInterval)) 
+
+            keepCount = 3;
+            setsockopt(fd, SOL_TCP, TCP_KEEPCNT, (char *)&keepCount,sizeof(keepCount)) 
+
 ```
 
 - getsockopt()函数
