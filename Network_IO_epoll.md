@@ -76,6 +76,69 @@ non-blocking IO在执行recvfrom这个system call的时候，如果kernel的数�
     
 ```
 
+### poll
+
+- 概述
+
+```shell
+
+    select()和poll()系统调用的本质一样,poll() 的机制与 select() 类似，与 select() 在本质上没有多大差别，
+    管理多个描述符也是进行轮询，根据描述符的状态进行处理，但是 poll() 没有最大文件描述符数量的限制（但是数量过大后性能也是会下降）.
+    poll() 和 select() 同样存在一个缺点就是,包含大量文件描述符的数组被整体复制于用户态和内核的地址空间之间，
+    而不论这些文件描述符是否就绪，它的开销随着文件描述符数量的增加而线性增大
+    
+```
+
+- poll()函数
+
+```shell
+
+    struct pollfd{
+    
+    　int fd； // 文件描述符
+    
+    　short event；// 请求的事件　监视该文件描述符的事件掩码，由用户来设置
+    
+    　short revent；// 返回的事件,内核在调用返回时设置.events中请求的任何事件都可能在revents中返回
+    
+    }
+    每一个pollfd结构体指定了一个被监视的文件描述符，可以传递多个结构体，指示poll()监视多个文件描述符
+    
+    在pollfd.event可以进行设置
+        　 POLLIN 　　　　　　　 有数据可读(读事件一般选这个)
+        　 POLLRDNORM 　　　　  有普通数据可读
+        　 POLLRDBAND　　　　　 有优先数据可读
+        　 POLLPRI　　　　　　　 有紧迫数据可读
+           POLLOUT　　　　　　   写数据不会导致阻塞(写事件一般选这个)
+           POLLWRNORM　　　　　  写普通数据不会导致阻塞
+           POLLWRBAND　　　　　  写优先数据不会导致阻塞。
+           POLLMSGSIGPOLL 　　　消息可用
+       
+     只属于pollfd.revent
+            POLLER　　   指定的文件描述符发生错误。
+        　　 POLLHUP　　 指定的文件描述符挂起事件。
+        　　 POLLNVAL　　指定的文件描述符非法。
+        
+    每个结构体的 events域是由用户来设置,告诉内核我们关注的是什么,而revents域是返回时内核设置的,以说明对该描述符发生了什么事件.
+           
+    int poll(struct pollfd *fds, nfds_t nfds, int timeout);  
+    描述：
+        监视并等待多个文件描述符的属性变化
+        
+    参数：
+        fds：指向pollfd的指针
+        nfds:要监视的描述符的数目
+        timeout:单位毫秒
+                    -1:阻塞等待
+                    0:立即返回
+                    >0 :超时等待timeout毫秒
+                    
+    返回值：
+        成功: poll()返回结构体中revents域不为0的文件描述符个数(事件触发的个数)
+            0:什么事件都没有发生
+    
+```
+
 ### epoll
 
 - epoll_create()函数

@@ -754,6 +754,9 @@
             
     返回:
         返回实际接受的字节数    
+        -1: recv为非阻塞接受,errno
+             EAGAIN or EWOULDBLOCK:没有消息
+                
        
 ```
 
