@@ -30,6 +30,27 @@
     struct sockaddr是通用的套接字地址,而struct sockaddr_in则是internet环境下套接字的地址形式,二者长度一样,都是16个字节。
     二者是并列结构，指向sockaddr_in结构的指针也可以指向sockaddr。一般情况下，需要把sockaddr_in结构强制转换成sockaddr结构
     再传入系统调用函数中。
+    
+      struct sockaddr 
+        {
+            unsigned  short  sa_family;     /* address family, AF_xxx */
+            char  sa_data[14];              /* 14 bytes of protocol address */
+        };
+        
+       struct  sockaddr_in 
+        {
+            short  int  sin_family;              /* Address family 在socket编程中只能是AF_INET */
+            unsigned  short  int  sin_port;      /* Port number 使用网络字节顺序 */
+            struct  in_addr  sin_addr;           /* Internet address */
+            unsigned  char  sin_zero[8];         /* Same size as struct sockaddr,
+                                                    sin_zero是为了让sockaddr与sockaddr_in两个数据结构保持大小相同而
+                                                    保留的空字节。*/
+       };
+       
+       struct  in_addr
+        {
+             unsigned  long  s_addr;
+        };
 ```
 
 - 网络进程通信
