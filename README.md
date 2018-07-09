@@ -462,7 +462,7 @@
     
     描述:
         TCP服务器端依次调用socket()、bind()、listen()之后,就会监听指定的socket地址了.
-        TCP客户端依次调用socket()、connect()之后就想TCP服务器发送了一个连接请求.
+        TCP客户端依次调用socket()、connect()之后就向TCP服务器发送了一个连接请求.
         TCP服务器监听到这个请求之后,就会调用accept()函数取接收请求.这样连接就建立好了
     参数:
         sockfd: 服务器的监听socket描述字
@@ -539,6 +539,168 @@
         server_addr: 服务器的(ip:port)网络序
             
          
+```
+
+- recv()函数
+
+```c
+
+    ssize_t recv(int sockfd, void *buf, size_t len, int flags);
+    
+    描述:
+          适用与TCP连接
+         不论是客户还是服务器应用程序都用recv函数从TCP连接的另一端接收数据.
+         Socket的recv函数的执行流程:
+            当应用程序调用recv函数时,recv先等待s的发送缓冲中的数据被协议传送完毕,
+            如果协议在传送s的发送缓冲中的数据时出现网络错误,那么recv函数返回SOCKET_ERROR.
+            如果s的发送缓冲中没有数据或者数据被协议成功发送完毕后,recv先检查套接字s的接收缓冲区.
+            如果s接收缓冲区中没有数据或者协议正在接收数据,那么recv就一直等待.只到 协议把数据接收完毕。
+            当协议把数据接收完毕，recv函数就把s的接收缓冲中的数据copy到buf中
+            （注意协议接收到的数据可能大于buf的长度，所以 在这种情况下要调用几次recv函数才能把s的接收缓冲中的数据copy完.
+            recv函数仅仅是copy数据，真正的接收数据是协议来完成的）,
+            recv函数返回其实际copy的字节数。如果recv在copy时出错,那么它返回SOCKET_ERROR；
+            如果recv函数在等待协议接收数据时网络中断了，那么它返回0。
+    参数:
+        sockfd: 该函数的第一个参数指定接收端套接字描述符
+        len : 限定从接受缓冲区中读取的最大字节数,可能接受缓冲区中字节数大于len,则recv一次最多有len字节数从接受缓冲区剪切到用户的
+               缓冲区中
+        flags: 一般设置为0
+            
+    返回:
+        返回实际接受的字节数    
+        -1: recv为非阻塞接受,errno
+             EAGAIN or EWOULDBLOCK:没有消息
+                
+       
+```
+
+- recvfrom()函数
+
+```c
+
+    ssize_t recvfrom(int socket, void *buffer, size_t length,
+           int flags, struct sockaddr *address, socklen_t *address_len);
+    
+    描述:
+          主要用于UDP连接
+          
+    参数:
+        sockfd: 该函数的第一个参数指定接收端套接字描述符
+        buffer:用户自定义的接受缓冲区
+        length:接受缓冲区的大小
+        flags: 一般设置为0
+                MSG_PEEK:对接受的数据进行预查看,该数据被指定为未读(不会从系统接受缓冲区中删除)
+                         下一次recvfrom()函数或则类似功能的函数会返回该数据
+                
+        address:
+                1.可以为NULL
+                2.被赋值的指针:保存对端的address信息
+                
+        address_len:地址大小
+            
+    返回:
+        返回实际接受的字节数    
+       
+```
+
+- send()函数
+
+```c
+
+    ssize_t send(int sockfd, const void *buff, size_t nbytes, int flags);
+    
+    描述:
+           适用于tcp协议
+          1) send先比较发送数据的长度nbytes和套接字sockfd的发送缓冲区的长度，
+          如果nbytes > 套接字sockfd的发送缓冲区的长度, 该函数要考虑是否阻塞,
+          如果是阻塞则只需要调用一次,如果是非阻塞则需要调用多次send.
+
+          2) 如果nbtyes <= 套接字sockfd的发送缓冲区的长度,那么send先检查协议是否正在发送sockfd的发送缓冲区中的数据,
+          如果是就等待协议把数据发送完，
+          如果协议还没有开始发送sockfd的发送缓冲区中的数据或者sockfd的发送缓冲区中没有数据，
+          那么send就比较sockfd的发送缓冲区的剩余空间和nbytes
+
+           3) 如果 nbytes > 套接字sockfd的发送缓冲区剩余空间的长度，
+              send就一起等待协议把套接字sockfd的发送缓冲区中的数据发送完
+
+          4) 如果 nbytes < 套接字sockfd的发送缓冲区剩余空间大小，
+              send就仅仅把buf中的数据copy到剩余空间里(注意并不是send把套接字sockfd的发送缓冲区中的数据传到连接的另一端的，
+              而是协议传送的，send仅仅是把buf中的数据copy到套接字sockfd的发送缓冲区的剩余空间里)。
+
+          5) 如果send函数copy成功，就返回实际copy的字节数，如果send在copy数据时出现错误，那么send就返回SOCKET_ERROR;
+              如果在等待协议传送数据时网络断开，send函数也返回SOCKET_ERROR。
+
+          6) send函数把buff中的数据成功copy到sockfd的发送缓冲区的剩余空间后它就返回了，
+              但是此时这些数据并不一定马上被传到连接的另一端。
+              如果协议在后续的传送过程中出现网络错误的话，那么下一个socket函数就会返回SOCKET_ERROR。
+
+          7) 在unix系统下，如果send在等待协议传送数据时网络断开，调用send的进程会接收到一个SIGPIPE信号，
+              进程对该信号的处理是进程终止。
+              
+          1.在阻塞模式下:send的发送情况(缓冲区的大小为16k)
+            1，发送一个小于16k的数据，send马上就返回了
+               也就说是，send把待发送的数据放入发送缓冲马上就返回了，
+               前提是发送的数据字节数小于缓冲大小
+            2，发送一个大于16k的数据，send没有马上返回，阻塞了一下
+               send一定要把所有数据放入缓冲区才会返回，假设我们发32k的数据，
+               当send返回的时候，有16k数据已经到达另一端，剩下16k还在缓冲里面没有发出去
+               
+            所以只需要调用一次
+            nBytes = send(m_socket,buf,len,0);
+            返回值 nBytes一定等于len
+            
+          2.非阻塞模式下(缓冲区的大小为16k)
+            (1):发送一个小于16k的数据，send马上返回了，
+                而且返回的字节长度是等于发送的字节长度的，情况和阻塞模式是向相同的
+            
+           (2):发送一个大于16k的数据，send也是马上就返回了，返回的nByte小于待发送的字节数
+               在发送大于16k数据的情况下，多次调用send函数是必须的.
+                  来模拟一下实际情况，假设我们有32k的数据要发送:
+            
+                  第一次send，返回16384字节（16k），也就是填满了缓冲区
+                  第二次send，在这之前sleep了1000毫秒，这段时间可能已经有5000字节从缓冲区发出，
+                    到达另外一端了，于是缓冲区空了5000字节出来，相应的，这次返回的是5000，表示新放入了5000字节到缓冲区
+                  第三次send  ，和第二次相同，又放了6000字节
+                  最后一次send，放入了剩下的字节数，这个时候缓冲还是有数据的。
+            
+            
+            
+    参数:
+          sockfd: 指定发送端套接字描述符.
+          flags: 一般设置为0
+                  
+    返回:
+        返回实际接受的字节数    
+       
+```
+
+
+- sendto()函数
+
+```c
+
+    int sendto(int sockfd, const void * msg, int len, unsigned int flags, 
+               const struct sockaddr *to, int tolen ) ;
+    
+    描述:
+          主要用于UDP协议
+          
+    参数:
+        sockfd: 通信的socket套接字
+        msg:用户自定义的接受缓冲区
+        len:接受缓冲区的大小
+        flags: 一般设置为0
+        to:
+                1.可以为NULL
+                2.被赋值的指针:保存对端的address信息
+                
+        to:要发送的对端的地址协议
+        tolen: sizeof(struct sockaddr)
+            
+    返回:
+         成功:返回实际传送出去的字符数    
+         失败:-1
+       
 ```
 
 - setsockopt
@@ -747,168 +909,6 @@
        （5）若fd=1,fd=2上都发生可读事件，则select返回，此时set变为0000,0011。注意：没有事件发生的fd=5被清空.
        
        select的一个缺点在于单个进程能够监视的文件描述符的数量存在最大限制,在Linux上一般为1024，
-       
-```
-
-- recv()函数
-
-```c
-
-    ssize_t recv(int sockfd, void *buf, size_t len, int flags);
-    
-    描述:
-          适用与TCP连接
-         不论是客户还是服务器应用程序都用recv函数从TCP连接的另一端接收数据.
-         Socket的recv函数的执行流程:
-            当应用程序调用recv函数时,recv先等待s的发送缓冲中的数据被协议传送完毕,
-            如果协议在传送s的发送缓冲中的数据时出现网络错误,那么recv函数返回SOCKET_ERROR.
-            如果s的发送缓冲中没有数据或者数据被协议成功发送完毕后,recv先检查套接字s的接收缓冲区.
-            如果s接收缓冲区中没有数据或者协议正在接收数据,那么recv就一直等待.只到 协议把数据接收完毕。
-            当协议把数据接收完毕，recv函数就把s的接收缓冲中的数据copy到buf中
-            （注意协议接收到的数据可能大于buf的长度，所以 在这种情况下要调用几次recv函数才能把s的接收缓冲中的数据copy完.
-            recv函数仅仅是copy数据，真正的接收数据是协议来完成的）,
-            recv函数返回其实际copy的字节数。如果recv在copy时出错,那么它返回SOCKET_ERROR；
-            如果recv函数在等待协议接收数据时网络中断了，那么它返回0。
-    参数:
-        sockfd: 该函数的第一个参数指定接收端套接字描述符
-        len : 限定从接受缓冲区中读取的最大字节数,可能接受缓冲区中字节数大于len,则recv一次最多有len字节数从接受缓冲区剪切到用户的
-               缓冲区中
-        flags: 一般设置为0
-            
-    返回:
-        返回实际接受的字节数    
-        -1: recv为非阻塞接受,errno
-             EAGAIN or EWOULDBLOCK:没有消息
-                
-       
-```
-
-- recvfrom()函数
-
-```c
-
-    ssize_t recvfrom(int socket, void *buffer, size_t length,
-           int flags, struct sockaddr *address, socklen_t *address_len);
-    
-    描述:
-          主要用于UDP连接
-          
-    参数:
-        sockfd: 该函数的第一个参数指定接收端套接字描述符
-        buffer:用户自定义的接受缓冲区
-        length:接受缓冲区的大小
-        flags: 一般设置为0
-                MSG_PEEK:对接受的数据进行预查看,该数据被指定为未读(不会从系统接受缓冲区中删除)
-                         下一次recvfrom()函数或则类似功能的函数会返回该数据
-                
-        address:
-                1.可以为NULL
-                2.被赋值的指针:保存对端的address信息
-                
-        address_len:地址大小
-            
-    返回:
-        返回实际接受的字节数    
-       
-```
-
-- send()函数
-
-```c
-
-    ssize_t send(int sockfd, const void *buff, size_t nbytes, int flags);
-    
-    描述:
-           适用于tcp协议
-          1) send先比较发送数据的长度nbytes和套接字sockfd的发送缓冲区的长度，
-          如果nbytes > 套接字sockfd的发送缓冲区的长度, 该函数要考虑是否阻塞,
-          如果是阻塞则只需要调用一次,如果是非阻塞则需要调用多次send.
-
-          2) 如果nbtyes <= 套接字sockfd的发送缓冲区的长度,那么send先检查协议是否正在发送sockfd的发送缓冲区中的数据,
-          如果是就等待协议把数据发送完，
-          如果协议还没有开始发送sockfd的发送缓冲区中的数据或者sockfd的发送缓冲区中没有数据，
-          那么send就比较sockfd的发送缓冲区的剩余空间和nbytes
-
-           3) 如果 nbytes > 套接字sockfd的发送缓冲区剩余空间的长度，
-              send就一起等待协议把套接字sockfd的发送缓冲区中的数据发送完
-
-          4) 如果 nbytes < 套接字sockfd的发送缓冲区剩余空间大小，
-              send就仅仅把buf中的数据copy到剩余空间里(注意并不是send把套接字sockfd的发送缓冲区中的数据传到连接的另一端的，
-              而是协议传送的，send仅仅是把buf中的数据copy到套接字sockfd的发送缓冲区的剩余空间里)。
-
-          5) 如果send函数copy成功，就返回实际copy的字节数，如果send在copy数据时出现错误，那么send就返回SOCKET_ERROR;
-              如果在等待协议传送数据时网络断开，send函数也返回SOCKET_ERROR。
-
-          6) send函数把buff中的数据成功copy到sockfd的发送缓冲区的剩余空间后它就返回了，
-              但是此时这些数据并不一定马上被传到连接的另一端。
-              如果协议在后续的传送过程中出现网络错误的话，那么下一个socket函数就会返回SOCKET_ERROR。
-
-          7) 在unix系统下，如果send在等待协议传送数据时网络断开，调用send的进程会接收到一个SIGPIPE信号，
-              进程对该信号的处理是进程终止。
-              
-          1.在阻塞模式下:send的发送情况(缓冲区的大小为16k)
-            1，发送一个小于16k的数据，send马上就返回了
-               也就说是，send把待发送的数据放入发送缓冲马上就返回了，
-               前提是发送的数据字节数小于缓冲大小
-            2，发送一个大于16k的数据，send没有马上返回，阻塞了一下
-               send一定要把所有数据放入缓冲区才会返回，假设我们发32k的数据，
-               当send返回的时候，有16k数据已经到达另一端，剩下16k还在缓冲里面没有发出去
-               
-            所以只需要调用一次
-            nBytes = send(m_socket,buf,len,0);
-            返回值 nBytes一定等于len
-            
-          2.非阻塞模式下(缓冲区的大小为16k)
-            (1):发送一个小于16k的数据，send马上返回了，
-                而且返回的字节长度是等于发送的字节长度的，情况和阻塞模式是向相同的
-            
-           (2):发送一个大于16k的数据，send也是马上就返回了，返回的nByte小于待发送的字节数
-               在发送大于16k数据的情况下，多次调用send函数是必须的.
-                  来模拟一下实际情况，假设我们有32k的数据要发送:
-            
-                  第一次send，返回16384字节（16k），也就是填满了缓冲区
-                  第二次send，在这之前sleep了1000毫秒，这段时间可能已经有5000字节从缓冲区发出，
-                    到达另外一端了，于是缓冲区空了5000字节出来，相应的，这次返回的是5000，表示新放入了5000字节到缓冲区
-                  第三次send  ，和第二次相同，又放了6000字节
-                  最后一次send，放入了剩下的字节数，这个时候缓冲还是有数据的。
-            
-            
-            
-    参数:
-          sockfd: 指定发送端套接字描述符.
-          flags: 一般设置为0
-                  
-    返回:
-        返回实际接受的字节数    
-       
-```
-
-
-- sendto()函数
-
-```c
-
-    int sendto(int sockfd, const void * msg, int len, unsigned int flags, 
-               const struct sockaddr *to, int tolen ) ;
-    
-    描述:
-          主要用于UDP协议
-          
-    参数:
-        sockfd: 通信的socket套接字
-        msg:用户自定义的接受缓冲区
-        len:接受缓冲区的大小
-        flags: 一般设置为0
-        to:
-                1.可以为NULL
-                2.被赋值的指针:保存对端的address信息
-                
-        to:要发送的对端的地址协议
-        tolen: sizeof(struct sockaddr)
-            
-    返回:
-         成功:返回实际传送出去的字符数    
-         失败:-1
        
 ```
 
