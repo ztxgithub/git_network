@@ -298,3 +298,50 @@
     所以一般监听的文件描述符小于1024可以选择用select函数.
     
 ```
+
+## eventfd 
+
+```shell
+    1. 新增 eventfd 的原因
+        eventfd 是用来实现多进程或多线程的之间的事件通知的, 多线程之间的事件通知还有条件变量和管道．
+        (1) eventfd 与条件变量的比较
+                首先，条件变量必须和互斥锁结合使用，使用起来麻烦，而且性能未必比 eventfd 好，
+                其次条件变量不能像 eventfd 一样为 I/O 事件驱动，因此不能和服务器的 I/O 模式很好的融合
+                
+        (2) eventfd 与管道的比较
+                虽然管道能与 I/O 复用很好的融合，但很明显管道相比 eventfd 多用了一个文件描述符，
+                而且使用管道内核还得给其管理的缓冲区， eventfd 则不需要，所以单纯作为事件通知的话还是管道好用
+                
+    2. 接口
+            int eventfd(unsigned int initval, int flags);
+            
+            描述:
+                eventfd()创建一个文件描述符，用户可以通过这个文件描述符等待其可读来实现事件通知.
+                read、write、select(poll、epoll)、close 可以对该文件描述符进行操作．
+                内核会为这个对象维护一个64位的计数器(uint64_t)，并且使用第一个参数(initval)初始化这个计数器
+                
+            参数:
+                initval: 一般设置为 0 
+                flags:
+                        2.6.27 版本以后才可使用
+                        EFD_NONBLOCK: 非阻塞
+                        EFD_CLOEXEC： 表示当程序执行exec函数时本fd将被系统自动关闭,表示不传递
+                        
+            返回值:
+                 eventfd
+                
+                        
+    3. 功能
+            eventfd 是一个计数器相关的 fd，计数器不为零是有可读事件发生，read以后计数器清零，write递增计数器
+            write： 将缓冲区写入的 8 字节整形值加到内核计数器上
+            read： 读取 8 字节值， 并把计数器重设为 0. 如果调用 read 的时候计数器为 0，如果 eventfd 是阻塞的，
+                   read 就一直阻塞在这里，否则立即返回得到一个 EAGAIN 错误
+                   如果 buffer 的长度小于 8 那么 read 会失败， 错误代码被设置成 EINVAL。
+                   eventfd()创建时，initval 会初始化计数器值
+                   
+            例子:
+                 t = read(event_fd,&read_buf,sizeof(read_buf));
+                 其中　buffer　保存的大小一定是大于等于 8 字节，同时读的的 buffer 的值是内核中管理的 64 位的计数器,
+                 而计数器值是 write(event_fd,&write_buf,sizeof(write_buf)) write_buf 的值　
+            
+```
