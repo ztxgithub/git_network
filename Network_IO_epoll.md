@@ -252,7 +252,7 @@
         
     参数：
         epfd:由epoll_create()生成的epoll专用的文件描述符；
-        epoll_event:用于回传待处理事件的数组
+        epoll_event:用于回传待处理事件的数组,被赋值
         maxevents:每次能处理的事件数(但不能大于创建epoll_create()时的size),值必须大于0
         timeout:等待I/O事件发生的超时值,单位毫秒
                 -1:代表无限期的阻塞
@@ -292,6 +292,8 @@
     1. 监视的描述符数量不受限制,select 最多只能是1024个文件描述符
     2. IO的效率不会随着监视fd的数量的增长而下降.epoll不同于select和poll轮询的方式,
        而是通过每个fd定义的回调函数来实现的,只有就绪的fd才会执行回调函数
+    3. poll() 每次返回整个文件描述符数组,用户代码需要遍历数组以找到哪些文件描述符有 IO 事件(struct pollfd->revents)
+       而 epoll_wait() 返回的是活动 fd 的列表,需要遍历数量要小得多, epoll 比较适合连接数据量多,但活动的连接较少.
        
     如果没有大量的idle -connection或者dead-connection，epoll的效率并不会比select/poll高很多，
     但是当遇到大量的idle- connection，就会发现epoll的效率大大高于select/poll.
