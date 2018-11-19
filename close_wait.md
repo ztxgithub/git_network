@@ -72,3 +72,30 @@
         
 ```
 
+## 网络编程技巧
+
+```shell
+    1. 客户端在收到响应之后应该立即主动关闭,把 TIME_WAIT 留在客户端. 即哪边主动关闭连接,哪边有 TIME_WAIT
+    2. 更好的调试 socket api, 可以使用 python shell,一步一步调,不需要重复编译 c++.
+    
+            一个 terimal
+            $ python
+            >>> import socket,select
+            >>> s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            >>> s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR)
+            >>> s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+            >>> s.bind(('', 5000))
+            >>> s.listen(5)
+            >>> client, address = s.accept()
+            >> client.recv(1024) 
+            
+            另外一个 terimal
+            $ nc 127.0.0.1 5000
+              hello
+              
+              
+            调试的时候可以一个窗口看 log, 一个窗口 strace, 一个窗口 netcat/tempest/python 当通信方, 一个窗口 tcpdump
+            
+            
+```
+
